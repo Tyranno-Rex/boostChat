@@ -24,6 +24,7 @@
     <ProjectGuid>{302b3f67-99ea-4a55-afa9-d62fcfbcbcd7}</ProjectGuid>
     <RootNamespace>feebackend</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>fee-backend-server</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

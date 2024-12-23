@@ -1,3 +1,5 @@
+
+
 #include "../include/server.hpp"
 #include "../include/router.hpp"
 #include "../include/services/userService.hpp"
@@ -43,11 +45,7 @@ int main(void) {
 			ctx.setResponseResult(http::status::ok, "Room");
 			});
 
-		router_http->addRoute(GET, "/chat", [](Context& ctx) {
-			//chatController->getChatRoom(ctx);
-			});
-        
-        router_http->addRoute(POST, "/chat/create", [chatController](Context& ctx) {
+        router_http->addRoute(POST, "/room/create", [chatController](Context& ctx) {
             chatController->createChatRoom(ctx);
             });
 

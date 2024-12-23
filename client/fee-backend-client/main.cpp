@@ -118,6 +118,9 @@ void write_messages(tcp::socket& chat_socket, tcp::resolver::results_type& http_
                 if (message == "/room") {
                     send_http_request(io_context, http_endpoints, "/api/v1/room", http::verb::get);
                 }
+				if (message == "/room/create") {
+					send_http_request(io_context, http_endpoints, "/api/v1/room/create", http::verb::post);
+				}
                 else if (message.rfind("/delete", 0) == 0) {
                     send_http_request(io_context, http_endpoints, message, http::verb::delete_);
                 }

@@ -13,7 +13,12 @@ void Server::httpSession(tcp::socket socket) {
 		// response			: 서버에서 클라이언트로 보낼 HTTP 응답을 저장하는 변수
 		http::response<http::string_body> res;
 		// ctx 				: 클라이언트로부터 받은 HTTP 요청을 처리하는데 필요한 정보를 저장하는 변수
+		
+		std::string client_ip = socket.remote_endpoint().address().to_string();
+		std::cout << "Client IP: " << client_ip << std::endl;
+
 		auto ctx = Context(req, res);
+		ctx.setClientIP(client_ip);
 
 		// route() 함수는 클라이언트로부터 받은 HTTP 요청을 처리하는 함수이다.
 		if (!router->route(ctx)) {

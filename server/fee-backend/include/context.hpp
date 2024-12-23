@@ -11,6 +11,8 @@ private:
     const http::request<http::string_body>& request;
     http::response<http::string_body>& response;
     std::map<std::string, std::string> params;
+	http::status status;
+	std::string client_ip;
 
 public:
     Context(const http::request<http::string_body>& req,
@@ -26,4 +28,6 @@ public:
     void setParam(const std::string& key, const std::string& value);
 	std::string pathParam(const std::string& key) const;
 	std::string formParam(const std::string& key) const;
+	void setClientIP(const std::string& ip) {client_ip = ip;}   
+	std::string getClientIP() { return client_ip; }
 };

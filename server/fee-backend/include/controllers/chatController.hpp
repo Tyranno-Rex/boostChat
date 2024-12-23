@@ -11,6 +11,7 @@
 #include <boost/json.hpp>
 #include <boost/bind.hpp>
 #include <memory>
+#include <mutex>
 #include <pqxx/pqxx>
 
 namespace beast = boost::beast;
@@ -21,6 +22,7 @@ using tcp = net::ip::tcp;
 class ChatController {
 private:
 	std::shared_ptr<ChatService> chatService;
+	std::mutex g_chatRoomsMutex;
 
 public:
 	ChatController(std::shared_ptr<ChatService> service) : chatService(service) {};

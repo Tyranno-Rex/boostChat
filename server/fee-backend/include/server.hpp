@@ -29,9 +29,6 @@ using tcp = net::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 #define expected_checksum 0x04
 #define expected_size 0x08
 
-
-extern std::map<std::string, std::map<std::string, std::string>> g_chatRooms;
-
 class Server {
 private:
     short port;
