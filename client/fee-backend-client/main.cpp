@@ -25,39 +25,17 @@ void read_messages(tcp::socket& socket) {
             std::array<char, 4> size;
             std::array<char, 1> tcv;
 
-            // Read HCV
             boost::asio::read(socket, boost::asio::buffer(hcv));
-            if (hcv[0] != expected_hcv) {
-                std::cerr << "Invalid HCV" << std::endl;
-                return;
-            }
-
-            // Read CheckSum
             boost::asio::read(socket, boost::asio::buffer(checksum));
-
-            // Read Size
             boost::asio::read(socket, boost::asio::buffer(size));
+
             uint32_t payload_size = *reinterpret_cast<uint32_t*>(size.data());
-
-            // Read Payload
             std::vector<char> payload(payload_size);
+
             boost::asio::read(socket, boost::asio::buffer(payload));
-
-            // Read TCV
             boost::asio::read(socket, boost::asio::buffer(tcv));
-            if (tcv[0] != expected_tcv) {
-                std::cerr << "Invalid TCV" << std::endl;
-                return;
-            }
 
-            uint32_t received_checksum = *reinterpret_cast<uint32_t*>(checksum.data());
-            uint32_t calculated_checksum = calculate_checksum(payload);
-            if (received_checksum != calculated_checksum) {
-                std::cerr << "Invalid Checksum" << std::endl;
-                return;
-            }
-
-            // Process Payload
+            std::cout << "reading" << std::endl;
             std::string message(payload.begin(), payload.end());
             std::cout << "Received: " << message << std::endl;
         }
@@ -129,6 +107,8 @@ void write_messages(tcp::socket& chat_socket, tcp::resolver::results_type& http_
                 }
             }
             else { // 채팅 메시지
+				std::cout << "Sending: " << chat_socket.remote_endpoint().address().to_string() << std::endl;
+				std::cout << "Sending: " << message << std::endl;
                 boost::asio::write(chat_socket, boost::asio::buffer(hcv));
                 boost::asio::write(chat_socket, boost::asio::buffer(checksum_array));
                 boost::asio::write(chat_socket, boost::asio::buffer(size));
