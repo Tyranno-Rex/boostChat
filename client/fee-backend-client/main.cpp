@@ -4,58 +4,44 @@
 #include <thread>
 #include <vector>
 #include <array>
-#include <zlib.h> // CRC32 계산을 위해 zlib 라이브러리를 사용합니다.
+#include <zlib.h> 
+#include <openssl/md5.h>
+#include <openssl/evp.h>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
 using tcp = boost::asio::ip::tcp;
 
-const char expected_hcv = 0x02; // 예시 값, 실제 값으로 변경 필요
-const char expected_tcv = 0x03; // 예시 값, 실제 값으로 변경 필요
+const char expected_hcv = 0x02;
+const char expected_tcv = 0x03; 
 
-uint32_t calculate_checksum(const std::vector<char>& data) {
-    return crc32(0, reinterpret_cast<const unsigned char*>(data.data()), data.size());
-}
 
-void read_messages(tcp::socket& socket) {
-    try {
-        while (true) {
-            std::array<char, 1> hcv;
-            std::array<char, 4> checksum;
-            std::array<char, 4> size;
-            std::array<char, 1> tcv;
+struct PacketHeader {
+    short checkValue;
+    int PacketType;
+	int PacketSize;
+};
 
-            boost::asio::read(socket, boost::asio::buffer(hcv));
-            boost::asio::read(socket, boost::asio::buffer(checksum));
-            boost::asio::read(socket, boost::asio::buffer(size));
+struct Packet {
+	PacketHeader pheader;
+	char payload[128];
+};
 
-            uint32_t payload_size = *reinterpret_cast<uint32_t*>(size.data());
-            std::vector<char> payload(payload_size);
-
-            boost::asio::read(socket, boost::asio::buffer(payload));
-            boost::asio::read(socket, boost::asio::buffer(tcv));
-
-            std::cout << "reading" << std::endl;
-            std::string message(payload.begin(), payload.end());
-            std::cout << "Received: " << message << std::endl;
-        }
-    }
-    catch (std::exception& e) {
-        std::cerr << "Exception in read thread: " << e.what() << std::endl;
-    }
-}
 
 void send_http_request(boost::asio::io_context& io_context, tcp::resolver::results_type& http_endpoints, const std::string& target, http::verb method, const std::string& body = "") {
     try {
+		// HTTP 요청 보내기
         beast::tcp_stream stream(io_context);
         stream.connect(http_endpoints);
 
+		// 요청 작성
         http::request<http::string_body> req{ method, target, 11 };
         req.set(http::field::host, "localhost");
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
         req.body() = body;
         req.prepare_payload();
 
+		// 요청 보내기
         http::write(stream, req);
 
         // 응답 읽기
@@ -63,6 +49,7 @@ void send_http_request(boost::asio::io_context& io_context, tcp::resolver::resul
         http::response<http::dynamic_body> res;
         http::read(stream, buffer, res);
 
+		// 응답 출력
         std::cout << res << std::endl;
 
         // 연결 닫기
@@ -76,29 +63,126 @@ void send_http_request(boost::asio::io_context& io_context, tcp::resolver::resul
     }
 }
 
+// 아래 달게 되는 주석들은 내용을 처음 보는 사람에게 설명하기 위한 주석입니다.
+std::array<unsigned char, MD5_DIGEST_LENGTH> calculate_checksum(const std::vector<char>& data) {
+	// MD5란: 128비트 길이의 해시값을 생성하는 해시 함수
+	// 필요한 이유: 데이터의 무결성을 보장하기 위해 사용
+	// MD5 해시값을 저장할 배열
+    std::array<unsigned char, MD5_DIGEST_LENGTH> checksum;
+	// MD5 해시 계산
+	// EVP_MD_CTX_new: EVP_MD_CTX 객체 생성
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+	// EVP_MD_CTX_new 실패 시 예외 처리
+    if (mdctx == nullptr) {
+        throw std::runtime_error("Failed to create EVP_MD_CTX");
+    }
+
+	// MD5 해시 초기화
+	// DigestInit_ex: 해시 함수 초기화
+	// EVP_md5: MD5 해시 함수
+	// 초기화 작업 하는 이유 : 이전에 사용된 해시 함수의 상태를 초기화하기 위해
+    if (EVP_DigestInit_ex(mdctx, EVP_md5(), nullptr) != 1) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("Failed to initialize digest");
+    }
+
+	// MD5 해시 업데이트
+	// DigestUpdate: 데이터를 해시 함수에 업데이트
+	// data.data(): 데이터의 시작 주소
+	// data.size(): 데이터의 길이
+    if (EVP_DigestUpdate(mdctx, data.data(), data.size()) != 1) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("Failed to update digest");
+    }
+    
+	// MD5 해시 최종화
+    unsigned int length = 0;
+	// DigestFinal_ex: 해시 함수를 종료하고 결과를 저장
+	// checksum.data(): 해시 결과를 저장할 배열
+	// length: 해시 결과의 길이
+    if (EVP_DigestFinal_ex(mdctx, checksum.data(), &length) != 1) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("Failed to finalize digest");
+    }
+
+    EVP_MD_CTX_free(mdctx);
+    return checksum;
+}
+
+void read_messages(tcp::socket& socket) {
+    try {
+        while (true) {
+			// 수신할 데이터 크기를 먼저 읽음
+			// hcv: Header Check Value
+            std::array<char, 1> hcv;
+			// checksum: MD5 해시값
+            std::array<unsigned char, MD5_DIGEST_LENGTH> checksum;
+			// size: 데이터 크기
+            std::array<char, 4> size;
+			// tcv: Tail Check Value
+            std::array<char, 1> tcv;
+
+			// 데이터 수신
+            boost::asio::read(socket, boost::asio::buffer(hcv));
+            boost::asio::read(socket, boost::asio::buffer(checksum));
+            boost::asio::read(socket, boost::asio::buffer(size));
+
+			// 데이터 크기를 읽어서 payload 크기를 알아냄
+            uint32_t payload_size = *reinterpret_cast<uint32_t*>(size.data());
+            std::vector<char> payload(payload_size);
+
+			// 데이터 수신
+            boost::asio::read(socket, boost::asio::buffer(payload));
+            boost::asio::read(socket, boost::asio::buffer(tcv));
+
+            // 수신된 CheckSum 출력 (디버깅용)
+            std::cout << "Received checksum: ";
+            for (unsigned char byte : checksum) {
+                std::cout << std::hex << static_cast<int>(byte);
+            }
+			// 수신된 데이터 크기 출력 (디버깅용)
+            std::cout << std::dec << std::endl;
+
+            std::cout << "reading" << std::endl;
+            std::string message(payload.begin(), payload.end());
+			// message: 수신된 메시지
+            std::cout << "Received: " << message << std::endl;
+        }
+    }
+    catch (std::exception& e) {
+        std::cerr << "Exception in read thread: " << e.what() << std::endl;
+    }
+}
+
 void write_messages(tcp::socket& chat_socket, tcp::resolver::results_type& http_endpoints, boost::asio::io_context& io_context) {
     try {
         while (true) {
+			// 메시지 입력
             std::string message;
             std::getline(std::cin, message);
 
+			// 메시지를 payload로 변환
             std::vector<char> payload(message.begin(), message.end());
             uint32_t payload_size = payload.size();
-            uint32_t checksum = calculate_checksum(payload);
+            auto checksum = calculate_checksum(payload);
 
+			// hcv: Header Check Value
+			// checksum: MD5 해시값
+			// size: 데이터 크기
+			// tcv: Tail Check Value
             std::array<char, 1> hcv = { expected_hcv };
-            std::array<char, 4> checksum_array = *reinterpret_cast<std::array<char, 4>*>(&checksum);
             std::array<char, 4> size = *reinterpret_cast<std::array<char, 4>*>(&payload_size);
             std::array<char, 1> tcv = { expected_tcv };
-               
 
+			// 명령어인지 채팅 메시지인지 판단
             if (message.rfind("/", 0) == 0) { // 명령어는 '/'로 시작
+                //send_http_request(io_context, http_endpoints, "/", http::verb::post, message);
                 if (message == "/room") {
                     send_http_request(io_context, http_endpoints, "/api/v1/room", http::verb::get);
                 }
-				if (message == "/room/create") {
-					send_http_request(io_context, http_endpoints, "/api/v1/room/create", http::verb::post);
-				}
+                if (message == "/room/create") {
+                    send_http_request(io_context, http_endpoints, "/api/v1/room/create", http::verb::post);
+                }
                 else if (message.rfind("/delete", 0) == 0) {
                     send_http_request(io_context, http_endpoints, message, http::verb::delete_);
                 }
@@ -107,10 +191,8 @@ void write_messages(tcp::socket& chat_socket, tcp::resolver::results_type& http_
                 }
             }
             else { // 채팅 메시지
-				std::cout << "Sending: " << chat_socket.remote_endpoint().address().to_string() << std::endl;
-				std::cout << "Sending: " << message << std::endl;
                 boost::asio::write(chat_socket, boost::asio::buffer(hcv));
-                boost::asio::write(chat_socket, boost::asio::buffer(checksum_array));
+                boost::asio::write(chat_socket, boost::asio::buffer(checksum.data(), checksum.size()));
                 boost::asio::write(chat_socket, boost::asio::buffer(size));
                 boost::asio::write(chat_socket, boost::asio::buffer(payload));
                 boost::asio::write(chat_socket, boost::asio::buffer(tcv));
@@ -138,9 +220,11 @@ int main(int argc, char* argv[]) {
 
         boost::asio::connect(chat_socket, chat_endpoints);
 
+		// 채팅 서버와 HTTP 서버에 대한 연결을 만들고, 채팅 서버에 대한 소켓을 만듦
         std::thread read_thread(read_messages, std::ref(chat_socket));
         std::thread write_thread(write_messages, std::ref(chat_socket), std::ref(http_endpoints), std::ref(io_context));
-
+        
+		// 쓰레드가 종료될 때까지 대기
         read_thread.join();
         write_thread.join();
     }
