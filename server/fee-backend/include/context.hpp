@@ -11,17 +11,17 @@ private:
     const http::request<http::string_body>& request;
     http::response<http::string_body>& response;
     std::map<std::string, std::string> params;
+	std::map<std::string, std::string> form_params;
 	http::status status;
 	std::string client_ip;
 
 public:
     Context(const http::request<http::string_body>& req,
-        http::response<http::string_body>& res)
-        : request(req), response(res) {
-    }
+        http::response<http::string_body>& res);
 
     const http::request<http::string_body>& getRequest();
     http::response<http::string_body>& getResponse();
+	std::string getRequestBody();
 
     void setResponseResult(http::status status, const std::string& body);
     std::string getParam(const std::string& key) const;

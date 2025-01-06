@@ -42,6 +42,7 @@ int main(void) {
             });
         
         router_http->addRoute(GET, "/room", [](Context& ctx) {
+			//chatController->getChatRooms(ctx);
 			ctx.setResponseResult(http::status::ok, "Room");
 			});
 

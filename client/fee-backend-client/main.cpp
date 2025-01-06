@@ -38,8 +38,11 @@ void send_http_request(boost::asio::io_context& io_context, tcp::resolver::resul
         http::request<http::string_body> req{ method, target, 11 };
         req.set(http::field::host, "localhost");
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+        req.set(http::field::content_type, "application/json");
         req.body() = body;
         req.prepare_payload();
+
+        std::cout << body << std::endl;
 
 		// 요청 보내기
         http::write(stream, req);
@@ -63,7 +66,6 @@ void send_http_request(boost::asio::io_context& io_context, tcp::resolver::resul
     }
 }
 
-// 아래 달게 되는 주석들은 내용을 처음 보는 사람에게 설명하기 위한 주석입니다.
 std::array<unsigned char, MD5_DIGEST_LENGTH> calculate_checksum(const std::vector<char>& data) {
 	// MD5란: 128비트 길이의 해시값을 생성하는 해시 함수
 	// 필요한 이유: 데이터의 무결성을 보장하기 위해 사용
@@ -136,17 +138,15 @@ void read_messages(tcp::socket& socket) {
             boost::asio::read(socket, boost::asio::buffer(tcv));
 
             // 수신된 CheckSum 출력 (디버깅용)
-            std::cout << "Received checksum: ";
-            for (unsigned char byte : checksum) {
-                std::cout << std::hex << static_cast<int>(byte);
-            }
-			// 수신된 데이터 크기 출력 (디버깅용)
-            std::cout << std::dec << std::endl;
+   //         std::cout << "Received checksum: ";
+   //         for (unsigned char byte : checksum) {
+   //             std::cout << std::hex << static_cast<int>(byte);
+   //         }
+			//// 수신된 데이터 크기 출력 (디버깅용)
+   //         std::cout << std::dec << std::endl;
 
-            std::cout << "reading" << std::endl;
             std::string message(payload.begin(), payload.end());
-			// message: 수신된 메시지
-            std::cout << "Received: " << message << std::endl;
+            std::cout << message << std::endl;
         }
     }
     catch (std::exception& e) {
@@ -154,6 +154,7 @@ void read_messages(tcp::socket& socket) {
     }
 }
 
+// 아래 달게 되는 주석들은 내용을 처음 보는 사람에게 설명하기 위한 주석입니다.
 void write_messages(tcp::socket& chat_socket, tcp::resolver::results_type& http_endpoints, boost::asio::io_context& io_context) {
     try {
         while (true) {
@@ -177,11 +178,20 @@ void write_messages(tcp::socket& chat_socket, tcp::resolver::results_type& http_
 			// 명령어인지 채팅 메시지인지 판단
             if (message.rfind("/", 0) == 0) { // 명령어는 '/'로 시작
                 //send_http_request(io_context, http_endpoints, "/", http::verb::post, message);
-                if (message == "/room") {
+				if (message == "/room" && message.size() == 5) {
                     send_http_request(io_context, http_endpoints, "/api/v1/room", http::verb::get);
                 }
-                if (message == "/room/create") {
-                    send_http_request(io_context, http_endpoints, "/api/v1/room/create", http::verb::post);
+				if (message.rfind("/room/create", 0) == 0) {
+					// create뒤에 스페이스를 띄우고 방 이름을 입력하면 방을 생성할 수 있음
+                    // space를 기준으로 문자열 파싱
+                    //std::string chatRoomId = ctx.formParam("id");
+                    //std::string UserId = ctx.formParam("UserId");
+					std::string id = message.substr(13);
+					// 현재 클라이언트의 IP주소를 UserId로 사용
+					std::string UserId = chat_socket.local_endpoint().address().to_string();
+					std::string body = "{\"id\":\"" + id + "\",\"user_id\":\"" + UserId + "\"}";
+					// std::cout << "body:" << body << std::endl;
+					send_http_request(io_context, http_endpoints, "/api/v1/room/create", http::verb::post, body);
                 }
                 else if (message.rfind("/delete", 0) == 0) {
                     send_http_request(io_context, http_endpoints, message, http::verb::delete_);

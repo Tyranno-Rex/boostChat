@@ -126,28 +126,36 @@ void Server::broadcastMessage(const std::vector<char>& original_payload) {
 
     // 새로운 메시지 패킷 구성
     std::array<char, 1> hcv = { expected_hcv };
-	// checksum 계산
-	auto checksum = calculate_checksum(original_payload);
-	// checksum을 배열로 변환
-	std::array<char, MD5_DIGEST_LENGTH> checksum_array = *reinterpret_cast<std::array<char, MD5_DIGEST_LENGTH>*>(&checksum);
-	// payload size를 4바이트 배열로 변환
-    uint32_t payload_size = original_payload.size();
-	// payload size를 4바이트 배열로 변환
-    std::array<char, 4> size = *reinterpret_cast<std::array<char, 4>*>(&payload_size);
-	// tcv를 1바이트 배열로 변환
     std::array<char, 1> tcv = { expected_tcv };
+    // checksum 계산
+    auto checksum = calculate_checksum(original_payload);
+    // checksum을 배열로 변환
+    std::array<char, MD5_DIGEST_LENGTH> checksum_array = *reinterpret_cast<std::array<char, MD5_DIGEST_LENGTH>*>(&checksum);
 
-    // 메시지 순서대로 전송
-    for (auto& client : clients) {
+    for (auto it = clients.begin(); it != clients.end(); ) {
         try {
-            boost::asio::write(*client, boost::asio::buffer(hcv));
-            boost::asio::write(*client, boost::asio::buffer(checksum_array));
-            boost::asio::write(*client, boost::asio::buffer(size));
-            boost::asio::write(*client, boost::asio::buffer(original_payload));
-            boost::asio::write(*client, boost::asio::buffer(tcv));
+            boost::asio::write(**it, boost::asio::buffer(hcv));
+            boost::asio::write(**it, boost::asio::buffer(checksum_array));
+
+            // 어떤 클라이언트가 보냈는지 알기 위해 "client_ip : payload" 형태로 변환
+            std::string payload_str(original_payload.begin(), original_payload.end());
+            std::string client_ip = (*it)->remote_endpoint().address().to_string();
+            payload_str = client_ip + " : " + payload_str;
+            std::vector<char> payload(payload_str.begin(), payload_str.end());
+
+            // payload size를 4바이트 배열로 변환
+            uint32_t payload_size = payload.size();
+            std::array<char, 4> size = *reinterpret_cast<std::array<char, 4>*>(&payload_size);
+
+            boost::asio::write(**it, boost::asio::buffer(size));
+            boost::asio::write(**it, boost::asio::buffer(payload));
+            boost::asio::write(**it, boost::asio::buffer(tcv));
+            ++it;
         }
         catch (std::exception& e) {
+            // 클라이언트 제거
             std::cerr << "Error sending to client: " << e.what() << std::endl;
+            it = clients.erase(it);
         }
     }
 }
