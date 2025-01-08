@@ -155,57 +155,136 @@ void read_messages(tcp::socket& socket) {
 }
 
 // 아래 달게 되는 주석들은 내용을 처음 보는 사람에게 설명하기 위한 주석입니다.
+//void write_messages(tcp::socket& chat_socket, tcp::resolver::results_type& http_endpoints, boost::asio::io_context& io_context) {
+//    try {
+//        while (true) {
+//			// 메시지 입력
+//            std::string message;
+//            std::getline(std::cin, message);
+//
+//			// 메시지를 payload로 변환
+//            std::vector<char> payload(message.begin(), message.end());
+//            uint32_t payload_size = payload.size();
+//            auto checksum = calculate_checksum(payload);
+//
+//			// hcv: Header Check Value
+//			// checksum: MD5 해시값
+//			// size: 데이터 크기
+//			// tcv: Tail Check Value
+//            std::array<char, 1> hcv = { expected_hcv };
+//            std::array<char, 4> size = *reinterpret_cast<std::array<char, 4>*>(&payload_size);
+//            std::array<char, 1> tcv = { expected_tcv };
+//
+//			// 명령어인지 채팅 메시지인지 판단
+//			// /debug의 경우 스페이스를 띄우고 작성된 메시지를 while문으로 계속해서 서버에 전송
+//            if (message.rfind("/debug", 0) == 0) {
+//                boost::asio::thread_pool pool(4); // Create a thread pool with 4 threads
+//
+//                while (true) {
+//                    std::string debug_message = message.substr(7);
+//                    std::vector<char> debug_payload(debug_message.begin(), debug_message.end());
+//                    uint32_t debug_payload_size = debug_payload.size();
+//                    auto debug_checksum = calculate_checksum(debug_payload);
+//
+//                    std::array<char, 1> debug_hcv = { expected_hcv };
+//                    std::array<char, 4> debug_size = *reinterpret_cast<std::array<char, 4>*>(&debug_payload_size);
+//                    std::array<char, 1> debug_tcv = { expected_tcv };
+//
+//                    boost::asio::post(pool, [&chat_socket, debug_hcv, debug_checksum, debug_size, debug_payload, debug_tcv]() {
+//                        boost::asio::write(chat_socket, boost::asio::buffer(debug_hcv));
+//                        boost::asio::write(chat_socket, boost::asio::buffer(debug_checksum.data(), debug_checksum.size()));
+//                        boost::asio::write(chat_socket, boost::asio::buffer(debug_size));
+//                        boost::asio::write(chat_socket, boost::asio::buffer(debug_payload));
+//                        boost::asio::write(chat_socket, boost::asio::buffer(debug_tcv));
+//                        });
+//                }
+//
+//                pool.join(); // Wait for all threads to finish
+//            }
+//            if (message.rfind("/", 0) == 0) { // 명령어는 '/'로 시작
+//                //send_http_request(io_context, http_endpoints, "/", http::verb::post, message);
+//				if (message == "/room" && message.size() == 5) {
+//                    send_http_request(io_context, http_endpoints, "/api/v1/room", http::verb::get);
+//                }
+//				if (message.rfind("/room/create", 0) == 0) {
+//					// create뒤에 스페이스를 띄우고 방 이름을 입력하면 방을 생성할 수 있음
+//                    // space를 기준으로 문자열 파싱
+//                    //std::string chatRoomId = ctx.formParam("id");
+//                    //std::string UserId = ctx.formParam("UserId");
+//					std::string id = message.substr(13);
+//					// 현재 클라이언트의 IP주소를 UserId로 사용
+//					std::string UserId = chat_socket.local_endpoint().address().to_string();
+//					std::string body = "{\"id\":\"" + id + "\",\"user_id\":\"" + UserId + "\"}";
+//					// std::cout << "body:" << body << std::endl;
+//					send_http_request(io_context, http_endpoints, "/api/v1/room/create", http::verb::post, body);
+//                }
+//                else if (message.rfind("/delete", 0) == 0) {
+//                    send_http_request(io_context, http_endpoints, message, http::verb::delete_);
+//                }
+//                else {
+//                    send_http_request(io_context, http_endpoints, "/", http::verb::post, message);
+//                }
+//            }
+//            else { // 채팅 메시지
+//                boost::asio::write(chat_socket, boost::asio::buffer(hcv));
+//                boost::asio::write(chat_socket, boost::asio::buffer(checksum.data(), checksum.size()));
+//                boost::asio::write(chat_socket, boost::asio::buffer(size));
+//                boost::asio::write(chat_socket, boost::asio::buffer(payload));
+//                boost::asio::write(chat_socket, boost::asio::buffer(tcv));
+//            }
+//        }
+//    }
+//    catch (std::exception& e) {
+//        std::cerr << "Exception in write thread: " << e.what() << std::endl;
+//    }
+//}
+
+
 void write_messages(tcp::socket& chat_socket, tcp::resolver::results_type& http_endpoints, boost::asio::io_context& io_context) {
     try {
         while (true) {
-			// 메시지 입력
             std::string message;
             std::getline(std::cin, message);
 
-			// 메시지를 payload로 변환
-            std::vector<char> payload(message.begin(), message.end());
-            uint32_t payload_size = payload.size();
-            auto checksum = calculate_checksum(payload);
+            if (message.rfind("/debug", 0) == 0) {
+                while (true) {
+                    const int NUM_THREADS = 10;  // 원하는 스레드 수 설정
+                    boost::asio::thread_pool pool(NUM_THREADS);
+                    std::string debug_message = message.substr(7);
 
-			// hcv: Header Check Value
-			// checksum: MD5 해시값
-			// size: 데이터 크기
-			// tcv: Tail Check Value
-            std::array<char, 1> hcv = { expected_hcv };
-            std::array<char, 4> size = *reinterpret_cast<std::array<char, 4>*>(&payload_size);
-            std::array<char, 1> tcv = { expected_tcv };
+                    // 각 스레드별로 한 번씩만 메시지 전송
+                    for (int i = 0; i < NUM_THREADS; ++i) {
+					    // 각 메시지에 자신의 스레드 번호를 추가
+                        boost::asio::post(pool, [&chat_socket, debug_message, i]() {
+                            try {
+                                std::vector<char> debug_payload(debug_message.begin(), debug_message.end());
+                                uint32_t debug_payload_size = debug_payload.size();
+                                auto debug_checksum = calculate_checksum(debug_payload);
 
-			// 명령어인지 채팅 메시지인지 판단
-            if (message.rfind("/", 0) == 0) { // 명령어는 '/'로 시작
-                //send_http_request(io_context, http_endpoints, "/", http::verb::post, message);
-				if (message == "/room" && message.size() == 5) {
-                    send_http_request(io_context, http_endpoints, "/api/v1/room", http::verb::get);
+                                std::array<char, 1> debug_hcv = { expected_hcv };
+                                std::array<char, 4> debug_size = *reinterpret_cast<std::array<char, 4>*>(&debug_payload_size);
+                                std::array<char, 1> debug_tcv = { expected_tcv };
+
+                                // 모든 write 작업을 하나의 연속된 작업으로 처리
+                                std::vector<boost::asio::const_buffer> buffers = {
+                                    boost::asio::buffer(debug_hcv),
+                                    boost::asio::buffer(debug_checksum.data(), debug_checksum.size()),
+                                    boost::asio::buffer(debug_size),
+                                    boost::asio::buffer(debug_payload),
+                                    boost::asio::buffer(debug_tcv)
+                                };
+                                boost::asio::write(chat_socket, buffers);
+                            }
+                            catch (const std::exception& e) {
+                                std::cerr << "Error in debug thread " << i << ": " << e.what() << std::endl;
+								exit(1);
+                            }
+                            });
+                    }
+
+                    pool.wait();  // 모든 작업이 완료될 때까지 대기
+                    continue;
                 }
-				if (message.rfind("/room/create", 0) == 0) {
-					// create뒤에 스페이스를 띄우고 방 이름을 입력하면 방을 생성할 수 있음
-                    // space를 기준으로 문자열 파싱
-                    //std::string chatRoomId = ctx.formParam("id");
-                    //std::string UserId = ctx.formParam("UserId");
-					std::string id = message.substr(13);
-					// 현재 클라이언트의 IP주소를 UserId로 사용
-					std::string UserId = chat_socket.local_endpoint().address().to_string();
-					std::string body = "{\"id\":\"" + id + "\",\"user_id\":\"" + UserId + "\"}";
-					// std::cout << "body:" << body << std::endl;
-					send_http_request(io_context, http_endpoints, "/api/v1/room/create", http::verb::post, body);
-                }
-                else if (message.rfind("/delete", 0) == 0) {
-                    send_http_request(io_context, http_endpoints, message, http::verb::delete_);
-                }
-                else {
-                    send_http_request(io_context, http_endpoints, "/", http::verb::post, message);
-                }
-            }
-            else { // 채팅 메시지
-                boost::asio::write(chat_socket, boost::asio::buffer(hcv));
-                boost::asio::write(chat_socket, boost::asio::buffer(checksum.data(), checksum.size()));
-                boost::asio::write(chat_socket, boost::asio::buffer(size));
-                boost::asio::write(chat_socket, boost::asio::buffer(payload));
-                boost::asio::write(chat_socket, boost::asio::buffer(tcv));
             }
         }
     }

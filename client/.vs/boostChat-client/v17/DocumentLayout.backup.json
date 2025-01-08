@@ -13,16 +13,12 @@
       "VerticalTabListWidth": 256,
       "DocumentGroups": [
         {
-          "DockedWidth": 607,
-          "SelectedChildIndex": -1,
+          "DockedWidth": 1661,
+          "SelectedChildIndex": 6,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:1:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
             },
             {
               "$type": "Bookmark",
@@ -38,29 +34,12 @@
             },
             {
               "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Bookmark",
               "Name": "ST:0:0:{d78612c7-9962-4b83-95d9-268046dad23a}"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "Orientation": 0,
-      "VerticalTabListWidth": 256,
-      "FloatingWindowState": {
-        "Id": "fdc3fe24-d604-4d92-9e07-5905327e0426",
-        "Display": 0,
-        "X": -760,
-        "Y": -26,
-        "Width": 1907,
-        "Height": 990,
-        "WindowState": 2
-      },
-      "DocumentGroups": [
-        {
-          "DockedWidth": 200,
-          "SelectedChildIndex": 0,
-          "Children": [
+            },
             {
               "$type": "Document",
               "DocumentIndex": 0,
@@ -69,9 +48,9 @@
               "RelativeDocumentMoniker": "fee-backend-client\\main.cpp",
               "ToolTip": "C:\\Users\\eunseong\\Documents\\GitHub\\boostChat\\client\\fee-backend-client\\main.cpp",
               "RelativeToolTip": "fee-backend-client\\main.cpp",
-              "ViewState": "AgIAAJwAAAAAAAAAAAAAAMIAAAARAAAAAAAAAA==",
+              "ViewState": "AgIAAO4AAAAAAAAAAAAwwAMBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-01-02T00:25:51.263Z",
+              "WhenOpened": "2025-01-08T09:49:19.114Z",
               "EditorCaption": ""
             }
           ]
