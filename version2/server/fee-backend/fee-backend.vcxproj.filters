@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일\controllers">
+      <UniqueIdentifier>{16187a9e-c17c-423c-8014-c7592b55a8d3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\models">
+      <UniqueIdentifier>{8616565b-1e54-44a0-a901-2896e509d029}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\serializers">
+      <UniqueIdentifier>{411e5195-be68-4073-b132-044ab0b6a31b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\services">
+      <UniqueIdentifier>{eac983f4-7499-4499-86c9-bff7b5fcff85}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\controllers">
+      <UniqueIdentifier>{14da3043-2cbc-4c3a-8355-dd163e59f00c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\models">
+      <UniqueIdentifier>{dea86302-1f68-4cfe-9d09-5c9d6ae6ab1f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\serializers">
+      <UniqueIdentifier>{ce9f8fdc-ad60-4ef5-ad7a-814f99da930f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\services">
+      <UniqueIdentifier>{8ba7482b-4709-4daa-a822-5d7ad40054b0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="소스 파일\db">
+      <UniqueIdentifier>{d55c9195-5df7-4b48-82d3-45e097c9623a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\router.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="include\server.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="include\context.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="include\models\user.hpp">
+      <Filter>헤더 파일\models</Filter>
+    </ClInclude>
+    <ClInclude Include="include\controllers\userController.hpp">
+      <Filter>헤더 파일\controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="include\services\userService.hpp">
+      <Filter>헤더 파일\services</Filter>
+    </ClInclude>
+    <ClInclude Include="include\services\chatService.hpp">
+      <Filter>헤더 파일\services</Filter>
+    </ClInclude>
+    <ClInclude Include="include\models\chat.hpp">
+      <Filter>헤더 파일\models</Filter>
+    </ClInclude>
+    <ClInclude Include="include\serializers\userDTO.hpp">
+      <Filter>헤더 파일\serializers</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="src\router.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="src\server.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="src\context.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="src\models\users.cpp">
+      <Filter>소스 파일\models</Filter>
+    </ClCompile>
+    <ClCompile Include="src\controllers\userController.cpp">
+      <Filter>소스 파일\controllers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\services\userService.cpp">
+      <Filter>소스 파일\services</Filter>
+    </ClCompile>
+    <ClCompile Include="src\services\chatService.cpp">
+      <Filter>소스 파일\services</Filter>
+    </ClCompile>
+    <ClCompile Include="include\controllers\chatController.hpp">
+      <Filter>헤더 파일\controllers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\controllers\chatController.cpp">
+      <Filter>소스 파일\controllers</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
