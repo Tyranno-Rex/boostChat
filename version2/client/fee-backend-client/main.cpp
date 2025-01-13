@@ -4,7 +4,6 @@
 #include <thread>
 #include <cstdint>
 #include <zlib.h>
-#include <chrono>
 
 #include <openssl/md5.h>
 #include <openssl/evp.h>
@@ -21,9 +20,6 @@ const char expected_tcv = 0x03;
 
 enum class PacketType : uint8_t {
     defEchoString = 100,
-	JH = 101,
-	YJ = 102,
-	ES = 103,
 };
 
 #pragma pack(push, 1)
@@ -93,7 +89,7 @@ std::array<unsigned char, MD5_DIGEST_LENGTH> calculate_checksum(const std::vecto
 void send_message(tcp::socket& socket, const std::string& message) {
     try {
         Packet packet;
-		packet.header.type = PacketType::ES;
+        packet.header.type = PacketType::defEchoString;
         packet.tail.value = 255; // 기본 값
 
         // payload 초기화
@@ -120,35 +116,26 @@ void send_message(tcp::socket& socket, const std::string& message) {
 
 void handle_sockets(boost::asio::io_context& io_context, const std::string& host, const std::string& port, uint8_t socket_cnt, const std::string& message) {
     try {
-        //std::vector<std::thread> threads;
-		std::vector<std::future<void>> futures;
+        std::vector<std::thread> threads;
         std::vector<std::shared_ptr<tcp::socket>> sockets(socket_cnt);
 
         for (uint8_t i = 0; i < socket_cnt; ++i) {
             auto socket = std::make_shared<tcp::socket>(io_context);
             tcp::resolver resolver(io_context);
             auto endpoints = resolver.resolve(host, port);
-
-			auto promise = std::make_shared<std::promise<void>>();
-			futures.push_back(promise->get_future());
-
-
-            // 비동기 연결 설정
-            boost::asio::async_connect(*socket, endpoints,
-                [socket, message, promise](const boost::system::error_code& ec, const tcp::endpoint&) {
-                    if (!ec) {
-                        send_message(*socket, message);
-                    }
-                    else {
-                        std::cerr << "Error connecting: " << ec.message() << std::endl;
-                    }
-					promise->set_value();
-                });
+            boost::asio::connect(*socket, endpoints);
             sockets[i] = socket;
         }
-		for (auto& future : futures) {
-			future.get();
-		}
+
+        for (uint8_t i = 0; i < socket_cnt; ++i) {
+            threads.emplace_back([socket = sockets[i], message]() {
+                send_message(*socket, message);
+                });
+        }
+
+        for (auto& thread : threads) {
+            thread.join();
+        }
     }
     catch (std::exception& e) {
         std::cerr << "Error handling sockets: " << e.what() << std::endl;
@@ -157,8 +144,6 @@ void handle_sockets(boost::asio::io_context& io_context, const std::string& host
 
 void write_messages(boost::asio::io_context& io_context, const std::string& host, const std::string& port) {
     try {
-		std::thread io_thread([&io_context]() { io_context.run(); });
-
         while (true) {
             std::string message;
             int thread_cnt, socket_cnt;
@@ -226,7 +211,7 @@ void write_messages(boost::asio::io_context& io_context, const std::string& host
                     debug_message = debug_message.substr(0, 128);
                 }
 
-                //while (true) {
+                while (true) {
                     boost::asio::thread_pool pool(thread_cnt);
                     for (int i = 0; i < thread_cnt; ++i) {
                         boost::asio::post(pool, [&io_context, &host, &port, socket_cnt, debug_message]() {
@@ -234,12 +219,10 @@ void write_messages(boost::asio::io_context& io_context, const std::string& host
                             });
                     }
                     pool.join();
-                //}
+                }
             }
             message.clear();
         }
-		io_context.stop();
-		io_thread.join();
     }
     catch (std::exception& e) {
         std::cerr << "Exception in write thread: " << e.what() << std::endl;
@@ -261,7 +244,7 @@ int main(int argc, char* argv[]) {
         boost::asio::io_context io_context;
         const std::string host = argv[1];
         const std::string chat_port = argv[2];
-        //const std::string http_port = argv[3];
+        const std::string http_port = argv[3];
 
         write_messages(io_context, host, chat_port);
     }

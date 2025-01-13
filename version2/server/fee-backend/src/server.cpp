@@ -1,37 +1,7 @@
 #include "../include/server.hpp"
+#include "../include/packet.hpp"
 #include <openssl/md5.h>
 #include <openssl/evp.h>
-
-std::map<std::string, std::map<std::string, std::string>> g_chatRooms;
-
-void Server::httpSession(tcp::socket socket) {
-    try {
-        beast::flat_buffer buffer;
-        http::request<http::string_body> req;
-        http::read(socket, buffer, req);
-        http::response<http::string_body> res;
-
-        std::string client_ip = socket.remote_endpoint().address().to_string();
-        std::cout << "Client IP: " << client_ip << std::endl;
-
-        auto ctx = Context(req, res);
-        ctx.setClientIP(client_ip);
-
-        if (!router->route(ctx)) {
-            res.result(http::status::not_found);
-            res.set(http::field::content_type, "text/plain");
-            res.body() = "The resource '" + std::string(req.target()) + "' was not found.";
-        }
-
-        if (res.body().length() != 0)
-            res.prepare_payload();
-
-        http::write(socket, res);
-    }
-    catch (std::exception& e) {
-        std::cerr << "Exception in thread: " << e.what() << std::endl;
-    }
-}
 
 std::array<unsigned char, MD5_DIGEST_LENGTH> calculate_checksum(const std::vector<char>& data) {
     // MD5란: 128비트 길이의 해시값을 생성하는 해시 함수
@@ -78,113 +48,91 @@ std::array<unsigned char, MD5_DIGEST_LENGTH> calculate_checksum(const std::vecto
     return checksum;
 }
 
-void Server::chatSession(tcp::socket socket) {
-    try {
-		// 클라이언트 소켓을 공유 포인터로 변환
-        auto client_socket = std::make_shared<tcp::socket>(std::move(socket));
-        {
-            std::cout << "client connected" << std::endl;
-            std::cout << "Client IP: " << client_socket->remote_endpoint().address().to_string() << std::endl;
+void Server::handleAccept(std::shared_ptr<tcp::socket> socket, tcp::acceptor& acceptor) {
+    {
+        std::lock_guard<std::mutex> lock(clients_mutex);
+        clients.push_back(socket);
+    }
+    chatSession(socket);
+    auto next_socket = std::make_shared<tcp::socket>(io_context);
+    acceptor.async_accept(*next_socket,
+        std::bind(&Server::handleAccept, this, next_socket, std::ref(acceptor)));
+}
+
+void Server::chatSession(std::shared_ptr<tcp::socket> client_socket) {
+    auto temp_buffer = std::make_shared<std::array<char, 1024>>();
+    auto packet_buffer = std::make_shared<PacketBuffer>();
+
+    client_socket->async_read_some(
+        boost::asio::buffer(*temp_buffer),
+        std::bind(&Server::handleRead, this,
+            std::placeholders::_1,
+            std::placeholders::_2,
+            client_socket,
+            temp_buffer,
+            packet_buffer));
+}
+
+void Server::handleRead(const boost::system::error_code& error,
+    size_t bytes_transferred,
+    std::shared_ptr<tcp::socket> client_socket,
+    std::shared_ptr<std::array<char, 1024>> temp_buffer,
+    std::shared_ptr<PacketBuffer> packet_buffer) {
+
+    if (!error) {
+        if (bytes_transferred > 0) {
+            packet_buffer->append(temp_buffer->data(), bytes_transferred);
+
+            while (auto maybe_packet = packet_buffer->extractPacket()) {
+                Packet& packet = *maybe_packet;
+                std::vector<char> payload_data(packet.payload,
+                    packet.payload + packet.header.size);
+
+                auto calculated_checksum = calculate_checksum(payload_data);
+                bool checksum_valid = std::memcmp(packet.header.checkSum,
+                    calculated_checksum.data(), MD5_DIGEST_LENGTH) == 0;
+
+                if (!checksum_valid) {
+                    std::cerr << "Checksum validation failed for packet" << std::endl;
+                    continue;
+                }
+
+                std::string message(packet.payload, packet.header.size);
+                std::cout << message << "\n";
+            }
+        }
+
+        client_socket->async_read_some(
+            boost::asio::buffer(*temp_buffer),
+            std::bind(&Server::handleRead, this,
+                std::placeholders::_1,
+                std::placeholders::_2,
+                client_socket,
+                temp_buffer,
+                packet_buffer));
+    }
+    else {
+        if (error == boost::asio::error::eof || error == boost::asio::error::connection_reset) {
             std::lock_guard<std::mutex> lock(clients_mutex);
-            clients.push_back(client_socket);
+            clients.erase(std::remove(clients.begin(), clients.end(), client_socket), clients.end());
         }
-
-        while (true) {
-			// hcv, checksum, size, payload, tcv를 읽기 위한 배열 생성
-            std::array<char, 1> hcv;
-			std::array<char, MD5_DIGEST_LENGTH> checksum;
-            std::array<char, 4> size;
-            std::array<char, 1> tcv;
-
-            // 메시지 읽기
-            boost::asio::read(*client_socket, boost::asio::buffer(hcv));
-            boost::asio::read(*client_socket, boost::asio::buffer(checksum));
-            boost::asio::read(*client_socket, boost::asio::buffer(size));
-
-			// payload: 메시지의 실제 데이터
-			// payload_size: payload의 크기
-			// reinterpret_cast: 데이터 형식을 변환
-            uint32_t payload_size = *reinterpret_cast<uint32_t*>(size.data());
-            std::vector<char> payload(payload_size);
-
-			// payload 읽기
-			// boost::asio::read: 비동기로 데이터를 읽음
-            boost::asio::read(*client_socket, boost::asio::buffer(payload));
-            boost::asio::read(*client_socket, boost::asio::buffer(tcv));
-
-            broadcastMessage(payload);
+        else {
+            std::cerr << "Error in chat session: " << error.message() << std::endl;
         }
-    }
-    catch (std::exception& e) {
-        std::cerr << "Exception in thread: " << e.what() << std::endl;
-    }
-}
-
-void Server::broadcastMessage(const std::vector<char>& original_payload) {
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    std::cout << "broadcasting message" << std::endl;
-
-    // 새로운 메시지 패킷 구성
-    std::array<char, 1> hcv = { expected_hcv };
-    std::array<char, 1> tcv = { expected_tcv };
-    // checksum 계산
-    auto checksum = calculate_checksum(original_payload);
-    // checksum을 배열로 변환
-    std::array<char, MD5_DIGEST_LENGTH> checksum_array = *reinterpret_cast<std::array<char, MD5_DIGEST_LENGTH>*>(&checksum);
-
-    for (auto it = clients.begin(); it != clients.end(); ) {
-        try {
-            boost::asio::write(**it, boost::asio::buffer(hcv));
-            boost::asio::write(**it, boost::asio::buffer(checksum_array));
-
-            // 어떤 클라이언트가 보냈는지 알기 위해 "client_ip : payload" 형태로 변환
-            std::string payload_str(original_payload.begin(), original_payload.end());
-            std::string client_ip = (*it)->remote_endpoint().address().to_string();
-            payload_str = client_ip + " : " + payload_str;
-            std::vector<char> payload(payload_str.begin(), payload_str.end());
-
-            // payload size를 4바이트 배열로 변환
-            uint32_t payload_size = payload.size();
-            std::array<char, 4> size = *reinterpret_cast<std::array<char, 4>*>(&payload_size);
-
-            boost::asio::write(**it, boost::asio::buffer(size));
-            boost::asio::write(**it, boost::asio::buffer(payload));
-            boost::asio::write(**it, boost::asio::buffer(tcv));
-            ++it;
-        }
-        catch (std::exception& e) {
-            // 클라이언트 제거
-            std::cerr << "Error sending to client: " << e.what() << std::endl;
-            it = clients.erase(it);
-        }
-    }
-}
-
-void Server::run() {
-    tcp::acceptor acceptor(
-        io_context, { tcp::v4(), static_cast<boost::asio::ip::port_type>(port) });
-    while (true) {
-        tcp::socket socket{ io_context };
-        acceptor.accept(socket);
-        std::thread(&Server::httpSession, this, std::move(socket)).detach();
     }
 }
 
 void Server::chatRun() {
-	// tcp::acceptor 객체 생성
-	// acceptor: 클라이언트의 연결을 수락하는 객체
-	// io_context: 비동기 I/O 작업을 처리하는 객체
-	// port: 서버의 포트 번호
-	// v4(): IPv4 주소 체계 사용
-    tcp::acceptor acceptor(
-        io_context, { tcp::v4(), static_cast<boost::asio::ip::port_type>(port) });
-    while (true) {
-        tcp::socket socket{ io_context };
-        acceptor.accept(socket);
-        std::thread(&Server::chatSession, this, std::move(socket)).detach();
-    }
-}
+    try {
+        tcp::acceptor acceptor(io_context, { tcp::v4(), static_cast<boost::asio::ip::port_type>(port) });
 
-short Server::getPort() {
-    return port;
+        auto first_socket = std::make_shared<tcp::socket>(io_context);
+        acceptor.async_accept(*first_socket,
+            std::bind(&Server::handleAccept, this, first_socket, std::ref(acceptor)));
+
+        io_context.run();
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error in chatRun: " << e.what() << std::endl;
+    }
 }

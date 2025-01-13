@@ -134,27 +134,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="include\context.hpp" />
-    <ClInclude Include="include\controllers\userController.hpp" />
-    <ClInclude Include="include\models\chat.hpp" />
-    <ClInclude Include="include\models\user.hpp" />
-    <ClInclude Include="include\router.hpp" />
-    <ClInclude Include="include\serializers\userDTO.hpp" />
+    <ClInclude Include="include\packet.hpp" />
     <ClInclude Include="include\server.hpp" />
-    <ClInclude Include="include\services\chatService.hpp" />
-    <ClInclude Include="include\services\userService.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="include\controllers\chatController.hpp" />
-    <ClCompile Include="src\context.cpp" />
-    <ClCompile Include="src\controllers\chatController.cpp" />
-    <ClCompile Include="src\controllers\userController.cpp" />
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\models\users.cpp" />
-    <ClCompile Include="src\router.cpp" />
     <ClCompile Include="src\server.cpp" />
-    <ClCompile Include="src\services\chatService.cpp" />
-    <ClCompile Include="src\services\userService.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

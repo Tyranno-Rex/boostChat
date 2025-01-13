@@ -31,7 +31,7 @@ int main(void) {
         Server ConsoleServer(3571);
         Server chatServer(3572);
 
-        pqxx::connection conn = pqxx::connection("dbname=fee user=postgres password=1234 hostaddr=");
+        pqxx::connection conn = pqxx::connection("dbname=boostChat user=postgres password=1234 hostaddr=");
 
         std::thread consoleThread(consoleInputHandler);
         std::thread chatThread([&chatServer]() {
