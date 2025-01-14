@@ -146,20 +146,9 @@ void handle_sockets(boost::asio::io_context& io_context, const std::string& host
                 });
             sockets[i] = socket;
         }
-        io_context.run();
-        
 		for (auto& future : futures) {
 			future.get();
 		}
-        //for (uint8_t i = 0; i < socket_cnt; ++i) {
-        //    threads.emplace_back([socket = sockets[i], message]() {
-        //        send_message(*socket, message);
-        //        });
-        //}
-
-        /*for (auto& thread : threads) {
-            thread.join();
-        }*/
     }
     catch (std::exception& e) {
         std::cerr << "Error handling sockets: " << e.what() << std::endl;
@@ -168,6 +157,8 @@ void handle_sockets(boost::asio::io_context& io_context, const std::string& host
 
 void write_messages(boost::asio::io_context& io_context, const std::string& host, const std::string& port) {
     try {
+		std::thread io_thread([&io_context]() { io_context.run(); });
+
         while (true) {
             std::string message;
             int thread_cnt, socket_cnt;
@@ -247,6 +238,8 @@ void write_messages(boost::asio::io_context& io_context, const std::string& host
             }
             message.clear();
         }
+		io_context.stop();
+		io_thread.join();
     }
     catch (std::exception& e) {
         std::cerr << "Exception in write thread: " << e.what() << std::endl;
