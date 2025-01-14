@@ -114,12 +114,12 @@ void send_message(tcp::socket& socket, const std::string& message) {
     }
 }
 
-void handle_sockets(boost::asio::io_context& io_context, const std::string& host, const std::string& port, uint8_t socket_cnt, const std::string& message) {
+void handle_sockets(boost::asio::io_context& io_context, const std::string& host, const std::string& port, int socket_cnt, const std::string& message) {
     try {
         std::vector<std::thread> threads;
         std::vector<std::shared_ptr<tcp::socket>> sockets(socket_cnt);
 
-        for (uint8_t i = 0; i < socket_cnt; ++i) {
+        for (int i = 0; i < socket_cnt; ++i) {
             auto socket = std::make_shared<tcp::socket>(io_context);
             tcp::resolver resolver(io_context);
             auto endpoints = resolver.resolve(host, port);
@@ -127,7 +127,7 @@ void handle_sockets(boost::asio::io_context& io_context, const std::string& host
             sockets[i] = socket;
         }
 
-        for (uint8_t i = 0; i < socket_cnt; ++i) {
+        for (int i = 0; i < socket_cnt; ++i) {
             threads.emplace_back([socket = sockets[i], message]() {
                 send_message(*socket, message);
                 });
