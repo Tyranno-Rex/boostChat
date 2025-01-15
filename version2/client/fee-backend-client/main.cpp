@@ -1,13 +1,20 @@
 #include <iostream>
 #include <array>
+#include <memory>
 #include <vector>
 #include <thread>
 #include <cstdint>
 #include <zlib.h>
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <mutex>
 
+#include <condition_variable>
 #include <openssl/md5.h>
 #include <openssl/evp.h>
 
+#include <boost/asio.hpp>
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
 
@@ -17,6 +24,7 @@ using tcp = boost::asio::ip::tcp;
 
 const char expected_hcv = 0x02;
 const char expected_tcv = 0x03;
+std::mutex cout_mutex;
 
 enum class PacketType : uint8_t {
     defEchoString = 100,
@@ -24,7 +32,7 @@ enum class PacketType : uint8_t {
 
 #pragma pack(push, 1)
 struct PacketHeader {
-    PacketType type;           // ±âº» : 100
+    PacketType type;           // ê¸°ë³¸ : 100
     char checkSum[16];
     uint32_t size;
 };
@@ -36,47 +44,47 @@ struct PacketTail {
 struct Packet {
     PacketHeader header;
     char payload[128];
-    PacketTail tail;              // ±âº» : 255
+    PacketTail tail;              // ê¸°ë³¸ : 255
 };
 #pragma pack(pop)
 
 //It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.However lit...
 std::array<unsigned char, MD5_DIGEST_LENGTH> calculate_checksum(const std::vector<char>& data) {
-    // MD5¶õ: 128ºñÆ® ±æÀÌÀÇ ÇØ½Ã°ªÀ» »ı¼ºÇÏ´Â ÇØ½Ã ÇÔ¼ö
-    // ÇÊ¿äÇÑ ÀÌÀ¯: µ¥ÀÌÅÍÀÇ ¹«°á¼ºÀ» º¸ÀåÇÏ±â À§ÇØ »ç¿ë
-    // MD5 ÇØ½Ã°ªÀ» ÀúÀåÇÒ ¹è¿­
+    // MD5ë€: 128ë¹„íŠ¸ ê¸¸ì´ì˜ í•´ì‹œê°’ì„ ìƒì„±í•˜ëŠ” í•´ì‹œ í•¨ìˆ˜
+    // í•„ìš”í•œ ì´ìœ : ë°ì´í„°ì˜ ë¬´ê²°ì„±ì„ ë³´ì¥í•˜ê¸° ìœ„í•´ ì‚¬ìš©
+    // MD5 í•´ì‹œê°’ì„ ì €ì¥í•  ë°°ì—´
     std::array<unsigned char, MD5_DIGEST_LENGTH> checksum;
-    // MD5 ÇØ½Ã °è»ê
-    // EVP_MD_CTX_new: EVP_MD_CTX °´Ã¼ »ı¼º
+    // MD5 í•´ì‹œ ê³„ì‚°
+    // EVP_MD_CTX_new: EVP_MD_CTX ê°ì²´ ìƒì„±
     EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
-    // EVP_MD_CTX_new ½ÇÆĞ ½Ã ¿¹¿Ü Ã³¸®
+    // EVP_MD_CTX_new ì‹¤íŒ¨ ì‹œ ì˜ˆì™¸ ì²˜ë¦¬
     if (mdctx == nullptr) {
         throw std::runtime_error("Failed to create EVP_MD_CTX");
     }
 
-    // MD5 ÇØ½Ã ÃÊ±âÈ­
-    // DigestInit_ex: ÇØ½Ã ÇÔ¼ö ÃÊ±âÈ­
-    // EVP_md5: MD5 ÇØ½Ã ÇÔ¼ö
-    // ÃÊ±âÈ­ ÀÛ¾÷ ÇÏ´Â ÀÌÀ¯ : ÀÌÀü¿¡ »ç¿ëµÈ ÇØ½Ã ÇÔ¼öÀÇ »óÅÂ¸¦ ÃÊ±âÈ­ÇÏ±â À§ÇØ
+    // MD5 í•´ì‹œ ì´ˆê¸°í™”
+    // DigestInit_ex: í•´ì‹œ í•¨ìˆ˜ ì´ˆê¸°í™”
+    // EVP_md5: MD5 í•´ì‹œ í•¨ìˆ˜
+    // ì´ˆê¸°í™” ì‘ì—… í•˜ëŠ” ì´ìœ  : ì´ì „ì— ì‚¬ìš©ëœ í•´ì‹œ í•¨ìˆ˜ì˜ ìƒíƒœë¥¼ ì´ˆê¸°í™”í•˜ê¸° ìœ„í•´
     if (EVP_DigestInit_ex(mdctx, EVP_md5(), nullptr) != 1) {
         EVP_MD_CTX_free(mdctx);
         throw std::runtime_error("Failed to initialize digest");
     }
 
-    // MD5 ÇØ½Ã ¾÷µ¥ÀÌÆ®
-    // DigestUpdate: µ¥ÀÌÅÍ¸¦ ÇØ½Ã ÇÔ¼ö¿¡ ¾÷µ¥ÀÌÆ®
-    // data.data(): µ¥ÀÌÅÍÀÇ ½ÃÀÛ ÁÖ¼Ò
-    // data.size(): µ¥ÀÌÅÍÀÇ ±æÀÌ
+    // MD5 í•´ì‹œ ì—…ë°ì´íŠ¸
+    // DigestUpdate: ë°ì´í„°ë¥¼ í•´ì‹œ í•¨ìˆ˜ì— ì—…ë°ì´íŠ¸
+    // data.data(): ë°ì´í„°ì˜ ì‹œì‘ ì£¼ì†Œ
+    // data.size(): ë°ì´í„°ì˜ ê¸¸ì´
     if (EVP_DigestUpdate(mdctx, data.data(), data.size()) != 1) {
         EVP_MD_CTX_free(mdctx);
         throw std::runtime_error("Failed to update digest");
     }
 
-    // MD5 ÇØ½Ã ÃÖÁ¾È­
+    // MD5 í•´ì‹œ ìµœì¢…í™”
     unsigned int length = 0;
-    // DigestFinal_ex: ÇØ½Ã ÇÔ¼ö¸¦ Á¾·áÇÏ°í °á°ú¸¦ ÀúÀå
-    // checksum.data(): ÇØ½Ã °á°ú¸¦ ÀúÀåÇÒ ¹è¿­
-    // length: ÇØ½Ã °á°úÀÇ ±æÀÌ
+    // DigestFinal_ex: í•´ì‹œ í•¨ìˆ˜ë¥¼ ì¢…ë£Œí•˜ê³  ê²°ê³¼ë¥¼ ì €ì¥
+    // checksum.data(): í•´ì‹œ ê²°ê³¼ë¥¼ ì €ì¥í•  ë°°ì—´
+    // length: í•´ì‹œ ê²°ê³¼ì˜ ê¸¸ì´
     if (EVP_DigestFinal_ex(mdctx, checksum.data(), &length) != 1) {
         EVP_MD_CTX_free(mdctx);
         throw std::runtime_error("Failed to finalize digest");
@@ -86,64 +94,95 @@ std::array<unsigned char, MD5_DIGEST_LENGTH> calculate_checksum(const std::vecto
     return checksum;
 }
 
-void send_message(tcp::socket& socket, const std::string& message) {
-    try {
-        Packet packet;
-        packet.header.type = PacketType::defEchoString;
-        packet.tail.value = 255; // ±âº» °ª
-
-        // payload ÃÊ±âÈ­
-        std::memset(packet.payload, 0, sizeof(packet.payload));
-        // message¸¦ payload¿¡ º¹»ç (128¹ÙÀÌÆ®±îÁö¸¸)
-        std::memcpy(packet.payload, message.data(), (size_t)128);
-
-        // ½ÇÁ¦ ¸Ş½ÃÁö Å©±â ¼³Á¤
-        //packet.header.size = static_cast<uint32_t>(std::min(message.length(), (size_t)128));
-        packet.header.size = static_cast<uint32_t>(std::min(message.length(), (size_t)128));
-
-        // checksum °è»ê
-        auto checksum = calculate_checksum(std::vector<char>(message.begin(), message.end()));
-        std::memcpy(packet.header.checkSum, checksum.data(), MD5_DIGEST_LENGTH);
-
-        // ÆĞÅ¶ Àü¼Û
-        boost::asio::write(socket, boost::asio::buffer(&packet, sizeof(packet)));
-        std::cout << "Message sent\n";
-    }
-    catch (std::exception& e) {
-        std::cerr << "Error sending message: " << e.what() << std::endl;
-    }
-}
-
-void handle_sockets(boost::asio::io_context& io_context, const std::string& host, const std::string& port, int socket_cnt, const std::string& message) {
-    try {
-        std::vector<std::thread> threads;
-        std::vector<std::shared_ptr<tcp::socket>> sockets(socket_cnt);
-
-        for (int i = 0; i < socket_cnt; ++i) {
-            auto socket = std::make_shared<tcp::socket>(io_context);
-            tcp::resolver resolver(io_context);
-            auto endpoints = resolver.resolve(host, port);
+class SocketPool {
+public:
+    SocketPool(boost::asio::io_context& io_context, const std::string& host, const std::string& port, std::size_t pool_size)
+        : io_context_(io_context), host_(host), port_(port) {
+        for (std::size_t i = 0; i < pool_size; ++i) {
+            auto socket = std::make_shared<tcp::socket>(io_context_);
+            tcp::resolver resolver(io_context_);
+            auto endpoints = resolver.resolve(host_, port_);
             boost::asio::connect(*socket, endpoints);
-            sockets[i] = socket;
-        }
-
-        for (int i = 0; i < socket_cnt; ++i) {
-            threads.emplace_back([socket = sockets[i], message]() {
-                send_message(*socket, message);
-                });
-        }
-
-        for (auto& thread : threads) {
-            thread.join();
+            pool_.push(socket);
         }
     }
-    catch (std::exception& e) {
+
+    std::shared_ptr<tcp::socket> acquire() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        while (pool_.empty()) {
+            cond_var_.wait(lock);
+        }
+        auto socket = pool_.front();
+        pool_.pop();
+        return socket;
+    }
+
+    void release(std::shared_ptr<tcp::socket> socket) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        pool_.push(socket);
+        cond_var_.notify_one();
+    }
+
+private:
+    boost::asio::io_context& io_context_;
+    std::string host_;
+    std::string port_;
+    std::queue<std::shared_ptr<tcp::socket>> pool_;
+    std::mutex mutex_;
+    std::condition_variable cond_var_;
+};
+
+void handle_sockets(SocketPool& socket_pool, int socket_cnt, const std::string& message) {
+    try {
+        for (int i = 0; i < socket_cnt; ++i) {
+            try {
+                auto socket = socket_pool.acquire();
+
+                Packet packet;
+                packet.header.type = PacketType::defEchoString;
+                packet.tail.value = 255; // ê¸°ë³¸ ê°’
+
+                // payload ì´ˆê¸°í™”
+                std::memset(packet.payload, 0, sizeof(packet.payload));
+                // messageë¥¼ payloadì— ë³µì‚¬ (128ë°”ì´íŠ¸ê¹Œì§€ë§Œ)
+                std::memcpy(packet.payload, message.data(), (size_t)128);
+
+                // ì‹¤ì œ ë©”ì‹œì§€ í¬ê¸° ì„¤ì •
+                packet.header.size = static_cast<uint32_t>(std::min(message.length(), (size_t)128));
+
+                // checksum ê³„ì‚°
+                auto checksum = calculate_checksum(std::vector<char>(message.begin(), message.end()));
+                std::memcpy(packet.header.checkSum, checksum.data(), MD5_DIGEST_LENGTH);
+
+                // íŒ¨í‚· ì „ì†¡
+                boost::asio::write(*socket, boost::asio::buffer(&packet, sizeof(packet)));
+
+                // ë³´ë‚¸ ì‹œê°„ ë° ë©”ì‹œì§€ ì¶œë ¥ (ì‹œê°„ì€ ì‹œê°„/ë¶„/ì´ˆ/ë°€ë¦¬ì´ˆ)
+                {
+                    std::lock_guard<std::mutex> lock(cout_mutex);
+                    std::string time = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+                    std::cout << "message: " << message << "\n";
+                }
+
+                // ì†Œì¼“ì„ í’€ì— ë°˜ë‚©
+                socket_pool.release(socket);
+            }
+            catch (const std::exception& e) {
+                std::lock_guard<std::mutex> lock(cout_mutex);
+                std::cerr << "Error handling socket " << i << ": " << e.what() << std::endl;
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        std::lock_guard<std::mutex> lock(cout_mutex);
         std::cerr << "Error handling sockets: " << e.what() << std::endl;
     }
 }
 
 void write_messages(boost::asio::io_context& io_context, const std::string& host, const std::string& port) {
     try {
+        SocketPool socket_pool(io_context, host, port, 10);
+
         while (true) {
             std::string message;
             int thread_cnt, socket_cnt;
@@ -160,17 +199,18 @@ void write_messages(boost::asio::io_context& io_context, const std::string& host
 					message = message.substr(0, 128);
 				}
 
-				boost::asio::thread_pool pool(thread_cnt);
-				for (int i = 0; i < thread_cnt; ++i) {
-					boost::asio::post(pool, [&io_context, &host, &port, socket_cnt, message]() {
-						handle_sockets(io_context, host, port, socket_cnt, message);
-						});
-				}
-				pool.join();
-			} else if (message == "2") {
+                boost::asio::thread_pool pool(thread_cnt);
+                for (int i = 0; i < thread_cnt; ++i) {
+                    boost::asio::post(pool, [&socket_pool, socket_cnt, message]() {
+                        handle_sockets(socket_pool, socket_cnt, message);
+                        });
+                }
+                pool.join();
+			} 
+            else if (message == "2") {
                 message = "In a quiet corner of the sprawling forest, where sunlight barely reached the ground, a small fox watched as shadows danced on the leaves.";
-                thread_cnt = 20;
-				socket_cnt = 10;
+                thread_cnt = 10;
+				socket_cnt = 50;
 
 				if (message.size() > 128) {
 					message = message.substr(0, 128);
@@ -178,15 +218,16 @@ void write_messages(boost::asio::io_context& io_context, const std::string& host
 
 				boost::asio::thread_pool pool(thread_cnt);
 				for (int i = 0; i < thread_cnt; ++i) {
-					boost::asio::post(pool, [&io_context, &host, &port, socket_cnt, message]() {
-						handle_sockets(io_context, host, port, socket_cnt, message);
+					boost::asio::post(pool, [&socket_pool, socket_cnt, message]() {
+						handle_sockets(socket_pool, socket_cnt, message);
 						});
 				}
 				pool.join();
-			} else if (message == "3") {
+			} 
+            else if (message == "3") {
 				message = "The sun was setting, casting a warm glow over the city as the last of the day's light faded away. the streets were quiet, the only sound the distant hum of traffic.";
-                thread_cnt = 50;
-				socket_cnt = 10;
+                thread_cnt = 10;
+				socket_cnt = 1000;
 
 				if (message.size() > 128) {
 					message = message.substr(0, 128);
@@ -194,12 +235,13 @@ void write_messages(boost::asio::io_context& io_context, const std::string& host
 
 				boost::asio::thread_pool pool(thread_cnt);
 				for (int i = 0; i < thread_cnt; ++i) {
-					boost::asio::post(pool, [&io_context, &host, &port, socket_cnt, message]() {
-						handle_sockets(io_context, host, port, socket_cnt, message);
+					boost::asio::post(pool, [&socket_pool, socket_cnt, message]() {
+						handle_sockets(socket_pool, socket_cnt, message);
 						});
 				}
 				pool.join();
-			} else if (message.rfind("/debug", 0) == 0) {
+			} 
+            else if (message.rfind("/debug", 0) == 0) {
                 std::cout << "Write Thread Count: ";
                 std::cin >> thread_cnt;
                 std::cout << "Socket Count: ";
@@ -212,13 +254,15 @@ void write_messages(boost::asio::io_context& io_context, const std::string& host
                 }
 
                 while (true) {
-                    boost::asio::thread_pool pool(thread_cnt);
-                    for (int i = 0; i < thread_cnt; ++i) {
-                        boost::asio::post(pool, [&io_context, &host, &port, socket_cnt, debug_message]() {
-                            handle_sockets(io_context, host, port, socket_cnt, debug_message);
-                            });
-                    }
-                    pool.join();
+				    for (int i = 0; i < thread_cnt; ++i) {
+					    boost::asio::thread_pool pool(thread_cnt);
+					    for (int i = 0; i < thread_cnt; ++i) {
+						    boost::asio::post(pool, [&socket_pool, socket_cnt, debug_message]() {
+							    handle_sockets(socket_pool, socket_cnt, debug_message);
+							    });
+					    }
+					    pool.join();
+				    }
                 }
             }
             message.clear();
@@ -234,18 +278,39 @@ int main(int argc, char* argv[]) {
 	_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
 	HeapSetInformation(NULL, HeapEnableTerminationOnCorruption, NULL, 0);
     
+    // ì…ë ¥ì„ ë°›ì•„ì„œ ì´ì¤‘ì—ì„œ ì„ íƒ
+    // 1. 127.0.0.1 3571
+	// 2. 192.168.20.158 27931
+    // 3. 192.
+   
 
-    if (argc != 4) {
-        std::cerr << "Usage: client <host> <chat_port> <http_port>\n";
-        return 1;
+    std::string host;
+    std::string chat_port;
+    std::string number;
+        
+	std::cout << "Enter the address: 1~3\n";
+	std::getline(std::cin, number);
+
+	if (number == "1") {
+        host = "127.0.0.1";
+		chat_port = "3572";
+	}
+    else if (number == "2") {
+        host = "192.168.20.158";
+        chat_port = "27931";
     }
+	else if (number == "3") {
+        host = "127.0.0.1";
+	    chat_port = "27931";
+	}
+	else {
+        host = "127.0.0.1";
+        chat_port = "3572";
+		std::cout << "Invalid input. Using default(local) address.\n";
+	}
 
     try {
         boost::asio::io_context io_context;
-        const std::string host = argv[1];
-        const std::string chat_port = argv[2];
-        const std::string http_port = argv[3];
-
         write_messages(io_context, host, chat_port);
     }
     catch (std::exception& e) {

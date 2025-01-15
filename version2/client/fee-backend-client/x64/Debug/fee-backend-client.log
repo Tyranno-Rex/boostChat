@@ -1,2 +1,10 @@
 ﻿C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\Microsoft.CppBuild.targets(531,5): warning MSB8028: The intermediate directory (x64\Debug\) contains files shared from another project (fee-backend-client.vcxproj).  This can lead to incorrect clean and rebuild behavior.
+  main.cpp
+C:\Users\eunseong\Documents\GitHub\boostChat\version2\client\fee-backend-client\main.cpp(1,1): warning C4819: The file contains a character that cannot be represented in the current code page (949). Save the file in Unicode format to prevent data loss
+  Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately. For example:
+  - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
+  - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
+  Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
   fee-backend-client.vcxproj -> C:\Users\eunseong\Documents\GitHub\boostChat\version2\client\x64\Debug\boostChat-client.exe
+  'pwsh.exe'은(는) 내부 또는 외부 명령, 실행할 수 있는 프로그램, 또는
+  배치 파일이 아닙니다.
